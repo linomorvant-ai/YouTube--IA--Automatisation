@@ -1,0 +1,109 @@
+name: Daily YouTube Kids video
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    # 13:00 UTC = 15:00 en France pendant l'heure d'été
+    # 14:00 UTC = 15:00 en France pendant l'heure d'hiver
+    # Les deux horaires sont programmés ; le système empêchera
+    # normalement une deuxième exécution le même jour.
+    - cron: "0 13 * * *"
+    - cron: "0 14 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  generate-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+
+      - name: Récupérer le projet
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Installer les dépendances Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Créer le fichier .env
+        env:
+          POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
+          POLLINATIONS_TEXT_MODEL: ${{ vars.POLLINATIONS_TEXT_MODEL }}
+          POLLINATIONS_VIDEO_MODEL: ${{ vars.POLLINATIONS_VIDEO_MODEL }}
+
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+          TEST_MODE: ${{ vars.TEST_MODE }}
+          YOUTUBE_VISIBILITY: ${{ vars.YOUTUBE_VISIBILITY }}
+
+        run: |
+          cat > .env <<EOF
+
+          LLM_PROVIDER=pollinations
+
+          POLLINATIONS_API_KEY=$POLLINATIONS_API_KEY
+          POLLINATIONS_TEXT_MODEL=${POLLINATIONS_TEXT_MODEL}
+          POLLINATIONS_VIDEO_MODEL=${POLLINATIONS_VIDEO_MODEL}
+          POLLINATIONS_IMAGE_MODEL=flux
+          POLLINATIONS_VOICE=nova
+
+          OPENAI_API_KEY=$OPENAI_API_KEY
+          OPENAI_MODEL=${OPENAI_MODEL}
+
+          YOUTUBE_CLIENT_ID=$YOUTUBE_CLIENT_ID
+          YOUTUBE_CLIENT_SECRET=$YOUTUBE_CLIENT_SECRET
+          YOUTUBE_REFRESH_TOKEN=$YOUTUBE_REFRESH_TOKEN
+
+          TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
+          TELEGRAM_CHAT_ID=$TELEGRAM_CHAT_ID
+
+          TEST_MODE=${TEST_MODE:-true}
+          YOUTUBE_VISIBILITY=${YOUTUBE_VISIBILITY:-private}
+
+          DAILY_UPLOAD_TIME=15:00
+          TIMEZONE=Europe/Paris
+          VIDEOS_PER_DAY=1
+          ALLOW_MULTIPLE_RUNS=false
+
+          LANGUAGE=fr
+          TARGET_AGE=4-8
+
+          VIDEO_DURATION_MIN=180
+          VIDEO_DURATION_MAX=300
+          SCENE_COUNT=6
+
+          EOF
+
+      - name: Lancer l'automatisation
+        run: |
+          python main.py
+
+      - name: Sauvegarder les fichiers du travail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-ai-run
+          path: work/
+          retention-days: 3
