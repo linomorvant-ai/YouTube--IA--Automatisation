@@ -1,0 +1,8 @@
+services:
+  youtube-ai:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./work:/app/work
+    restart: "no"
